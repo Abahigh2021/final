@@ -33,19 +33,16 @@ setfacl -b "$FILE"
 
 case "$OWNER" in
   jack)
-    # jill can write but not read jack's file
-    setfacl -m u:jill:-w- "$FILE"
+    setfacl -m u:jill:w "$FILE"
     setfacl -m u:tay:--- "$FILE"
     setfacl -m u:$MY:rw- "$FILE"
     ;;
   jill)
-    # jack can write but not read jill's file
-    setfacl -m u:jack:-w- "$FILE"
+    setfacl -m u:jack:w "$FILE"
     setfacl -m u:tay:--- "$FILE"
     setfacl -m u:$MY:rw- "$FILE"
     ;;
   tay)
-    # tay's file is private except for aba-hadi
     setfacl -m u:jack:--- "$FILE"
     setfacl -m u:jill:--- "$FILE"
     setfacl -m u:$MY:rw- "$FILE"
@@ -54,7 +51,7 @@ esac
 
 setfacl -m g::--- "$FILE"
 setfacl -m o:--- "$FILE"
-setfacl -m m:-w-
+setfacl -m m:rw- "$FILE"
 
 echo "Example 2 ACLs applied."
 getfacl "$FILE"
