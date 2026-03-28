@@ -16,29 +16,44 @@ if [ ! -e "$FILE" ]; then
   exit 1
 fi
 
-if [ "$OWNER" != "jack" ] && [ "$OWNER" != "jill" ]; then
-  echo "Error: owner must be jack or jill for Example 1"
+if [ "$OWNER" != "jack" ] && [ "$OWNER" != "jill" ] && [ "$OWNER" != "tay" ]; then
+  echo "Error: owner must be jack, jill, or tay"
   exit 1
-fi
-
-if [ "$OWNER" = "jack" ]; then
-  OTHER="jill"
-else
-  OTHER="jack"
 fi
 
 echo "Applying Example 1 ACLs to $FILE (owner: $OWNER)"
 
+# Reset file
 chown "$OWNER:$OWNER" "$FILE"
 chmod 600 "$FILE"
 setfacl -b "$FILE"
 
-setfacl -m u:$OTHER:r-- "$FILE"
-setfacl -m u:tay:--- "$FILE"
-setfacl -m u:$MY:rw- "$FILE"
+# Base ACLs
+setfacl -m u:$OWNER:rw- "$FILE"
+setfacl -m u:$MY:rwx "$FILE"
 setfacl -m g::--- "$FILE"
 setfacl -m o:--- "$FILE"
-setfacl -m m:rw- "$FILE"
+
+case "$OWNER" in
+  jack)
+    # jill can read jack
+    setfacl -m u:jill:r-- "$FILE"
+    # jack cannot read tay, so tay cannot read jack
+    setfacl -m u:tay:--- "$FILE"
+    ;;
+  jill)
+    # jack can read jill
+    setfacl -m u:jack:r-- "$FILE"
+    # tay cannot read jill
+    setfacl -m u:tay:--- "$FILE"
+    ;;
+  tay)
+    # jack cannot read tay
+    setfacl -m u:jack:--- "$FILE"
+    # jill cannot read tay
+    setfacl -m u:jill:--- "$FILE"
+    ;;
+esac
 
 echo "Example 1 ACLs applied."
 getfacl "$FILE"
