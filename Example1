@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+FILE="$1"
+OWNER="$2"
+
+if [ -z "$FILE" ] || [ -z "$OWNER" ]; then
+  echo "Usage: $0 /public/filename ownername"
+  exit 1
+fi
+
+echo "Applying Example 1 ACLs to $FILE (owner: $OWNER)"
+
+# Ensure correct owner
+chown "$OWNER":"$OWNER" "$FILE"
+
+# Base ACLs
+setfacl -m u:"$OWNER":rwx "$FILE"     # owner full access
+setfacl -m g::--- "$FILE"             # group no access
+setfacl -m o:--- "$FILE"              # others no access
+
+# Specific user rules
+setfacl -m u:tay:--- "$FILE"          # tay denied
+setfacl -m u:aba-hadi:rwx "$FILE"     # MySeneca user full access
+setfacl -m u:jill:r-- "$FILE"         # jill read-only
+
+echo "Example 1 ACLs applied."
