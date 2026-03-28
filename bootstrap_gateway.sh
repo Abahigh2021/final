@@ -1,14 +1,16 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 # Replace this MySeneca username if different
 MY="aba-hadi"
 
-# Packages
+export DEBIAN_FRONTEND=noninteractive
+
+echo "Installing packages..."
 apt update
 apt install -y openssh-server acl sudo
 
-# Create team groups
+echo "Creating team groups..."
 for g in attack defend bot; do
   getent group "$g" >/dev/null || groupadd "$g"
 done
@@ -24,20 +26,22 @@ declare -A USERS=(
 
 for u in "${!USERS[@]}"; do
   IFS=':' read -r primary teams <<< "${USERS[$u]}"
+  echo "Processing user: $u (primary: $primary, teams: $teams)"
   # create primary group if missing
   getent group "$primary" >/dev/null || groupadd "$primary"
   # create user if missing with primary group
   if ! id -u "$u" >/dev/null 2>&1; then
     useradd -m -s /bin/bash -g "$primary" "$u"
+    # Optional: set a temporary password for testing (remove for production)
     echo "$u:ChangeMe123" | chpasswd
+    echo "Created user $u with temporary password ChangeMe123"
+  else
+    echo "User $u already exists"
   fi
-  # set supplementary groups (replace existing supplementary groups)
+  # set supplementary groups (choose replace or append)
   if [ -n "$teams" ]; then
-    # convert comma list to comma-separated for usermod -aG
-    IFS=',' read -ra TG <<< "$teams"
-    # ensure each team group exists
-    for tg in "${TG[@]}"; do getent group "$tg" >/dev/null || groupadd "$tg"; done
-    usermod -G "$teams" "$u"
+    # Use -aG to append; change to -G to replace if you prefer
+    usermod -aG "$teams" "$u"
   fi
   # remove from generic 'users' group if present
   if getent group users >/dev/null; then
@@ -45,10 +49,10 @@ for u in "${!USERS[@]}"; do
   fi
 done
 
-# Give MySeneca sudo
+echo "Granting sudo to $MY"
 usermod -aG sudo "$MY"
 
-# Create /public with safe defaults
+echo "Creating /public with safe defaults..."
 mkdir -p /public
 chown root:root /public
 chmod 2770 /public            # setgid so files inherit directory group
@@ -58,7 +62,7 @@ setfacl -m o:--- /public
 setfacl -m d:u:$MY:rwx /public
 setfacl -m u:$MY:rwx /public
 
-# Disable root SSH login (append or replace)
+echo "Disabling root SSH login..."
 if grep -q '^PermitRootLogin' /etc/ssh/sshd_config 2>/dev/null; then
   sed -i 's/^PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
 else
@@ -67,4 +71,4 @@ fi
 systemctl restart sshd
 
 echo "Bootstrap complete. Users and groups created. /public ready."
-echo "Temporary passwords set to ChangeMe123 — change them with passwd."
+echo "Temporary passwords (if set) are ChangeMe123 — change them with passwd."
