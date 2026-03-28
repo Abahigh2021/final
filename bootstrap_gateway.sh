@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Replace this MySeneca username if different
+# MySeneca username (change if needed)
 MY="aba-hadi"
 
 export DEBIAN_FRONTEND=noninteractive
@@ -15,8 +15,7 @@ for g in attack defend bot; do
   getent group "$g" >/dev/null || groupadd "$g"
 done
 
-# Create per-user groups and users
-# Format: username:primarygroup:teamsupplementary
+echo "Creating per-user groups and users..."
 declare -A USERS=(
   [jack]="jack:attack"
   [jill]="jill:defend"
@@ -26,21 +25,16 @@ declare -A USERS=(
 
 for u in "${!USERS[@]}"; do
   IFS=':' read -r primary teams <<< "${USERS[$u]}"
-  echo "Processing user: $u (primary: $primary, teams: $teams)"
-  # create primary group if missing
+  echo "Processing $u (primary:$primary teams:$teams)"
   getent group "$primary" >/dev/null || groupadd "$primary"
-  # create user if missing with primary group
   if ! id -u "$u" >/dev/null 2>&1; then
     useradd -m -s /bin/bash -g "$primary" "$u"
-    # Optional: set a temporary password for testing (remove for production)
     echo "$u:ChangeMe123" | chpasswd
-    echo "Created user $u with temporary password ChangeMe123"
+    echo "Created $u with temporary password ChangeMe123"
   else
     echo "User $u already exists"
   fi
-  # set supplementary groups (choose replace or append)
   if [ -n "$teams" ]; then
-    # Use -aG to append; change to -G to replace if you prefer
     usermod -aG "$teams" "$u"
   fi
   # remove from generic 'users' group if present
@@ -52,17 +46,20 @@ done
 echo "Granting sudo to $MY"
 usermod -aG sudo "$MY"
 
-echo "Creating /public with safe defaults..."
+echo "Creating /public and allowing users to enter and create files..."
 mkdir -p /public
 chown root:root /public
 chmod 2770 /public            # setgid so files inherit directory group
-# default ACLs: others none; MySeneca full by default
-setfacl -m d:o:--- /public
-setfacl -m o:--- /public
-setfacl -m d:u:$MY:rwx /public
-setfacl -m u:$MY:rwx /public
 
-echo "Disabling root SSH login..."
+# Make /public accessible to the four users and set defaults so new files inherit named-user ACLs
+setfacl -m u:jack:rwx,u:jill:rwx,u:tay:rwx,u:$MY:rwx /public
+setfacl -d -m u:jack:rwx,u:jill:rwx,u:tay:rwx,u:$MY:rwx /public
+
+# Keep others denied
+setfacl -m o:--- /public
+setfacl -m d:o:--- /public
+
+echo "Disabling root SSH login (keeps pubkey/password for users)"
 if grep -q '^PermitRootLogin' /etc/ssh/sshd_config 2>/dev/null; then
   sed -i 's/^PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
 else
@@ -70,5 +67,5 @@ else
 fi
 systemctl restart sshd
 
-echo "Bootstrap complete. Users and groups created. /public ready."
-echo "Temporary passwords (if set) are ChangeMe123 — change them with passwd."
+echo "Bootstrap complete."
+echo "Temporary passwords set to ChangeMe123 — change them with passwd or use SSH keys."
