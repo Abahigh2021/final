@@ -1,105 +1,116 @@
-#!/usr/bin/env bash
-set -u
+#!/bin/bash
 
+# -------------------------------
+# 1. Usage check
+# -------------------------------
+if [ $# -eq 0 ]; then
+    echo "Usage: upload-ex1.bash file1 [file2 ...]"
+    echo "Uploads files to /public on 192.168.99.4"
+    echo "Then verifies permissions for Example 1."
+    exit 1
+fi
+
+SELF="$(id -un)"
 GATEWAY_IP="192.168.99.4"
 REMOTE_DIR="/public"
-SELF="$(id -un)"
-
-usage() {
-  echo "Usage: $(basename "$0") file1 [file2 ...]"
-  echo "Uploads files to $REMOTE_DIR on $GATEWAY_IP"
-  echo "Then verifies permissions for Example 1."
-}
-
-# -------------------------------
-# 1. No arguments
-# -------------------------------
-if [ "$#" -eq 0 ]; then
-  usage
-  exit 1
-fi
 
 uploaded_any=0
 
 # -------------------------------
-# 2. Expected ACLs for this user
-# -------------------------------
-case "$SELF" in
-  jack)
-    EXP_JACK="rw-"
-    EXP_JILL="r--"
-    EXP_TAY="---"
-    EXP_ABA="rw-"
-    ;;
-  jill)
-    EXP_JACK="r--"
-    EXP_JILL="rw-"
-    EXP_TAY="---"
-    EXP_ABA="rw-"
-    ;;
-  tay)
-    EXP_JACK="---"
-    EXP_JILL="---"
-    EXP_TAY="rw-"
-    EXP_ABA="rw-"
-    ;;
-  aba-hadi)
-    EXP_JACK="rw-"
-    EXP_JILL="rw-"
-    EXP_TAY="rw-"
-    EXP_ABA="rw-"
-    ;;
-  *)
-    echo "Error: unsupported user $SELF"
-    exit 1
-    ;;
-esac
-
-# -------------------------------
-# 3. Process each argument
+# 2. Loop through all arguments
 # -------------------------------
 for FILE in "$@"; do
 
-  if [ ! -f "$FILE" ]; then
-    echo "ERROR: '$FILE' is not an existing file"
-    continue
-  fi
+    if [ ! -f "$FILE" ]; then
+        echo "ERROR: '$FILE' is not an existing file"
+        continue
+    fi
 
-  BASENAME="$(basename "$FILE")"
+    BASENAME="$(basename "$FILE")"
 
-  echo "Uploading $FILE..."
-  if ! scp "$FILE" "${SELF}@${GATEWAY_IP}:${REMOTE_DIR}/"; then
-    echo "ERROR: upload failed for $FILE"
-    continue
-  fi
+    echo "Uploading $BASENAME..."
 
-  uploaded_any=1
+    if ! scp "$FILE" "${SELF}@${GATEWAY_IP}:${REMOTE_DIR}/" ; then
+        echo "ERROR: upload failed for $FILE"
+        continue
+    fi
 
-  # -------------------------------
-  # 4. Read ACLs from gateway
-  # -------------------------------
-  ACL_OUTPUT="$(ssh ${SELF}@${GATEWAY_IP} "getfacl ${REMOTE_DIR}/${BASENAME}")"
+    uploaded_any=1
 
-  echo "----- Checking ACLs for ${BASENAME} -----"
+    # -------------------------------
+    # 3. Read ACLs from gateway
+    # -------------------------------
+    ACL_OUTPUT="$(ssh ${SELF}@${GATEWAY_IP} "getfacl ${REMOTE_DIR}/${BASENAME}")"
 
-  # -------------------------------
-  # 5. Verify expected ACLs
-  # -------------------------------
-  echo "$ACL_OUTPUT" | grep -q "user:jack:${EXP_JACK}" || \
-    echo "WARNING: jack does NOT have ${EXP_JACK} on ${BASENAME}"
+    echo "----- Checking ACLs for ${BASENAME} -----"
 
-  echo "$ACL_OUTPUT" | grep -q "user:jill:${EXP_JILL}" || \
-    echo "WARNING: jill does NOT have ${EXP_JILL} on ${BASENAME}"
+    # -------------------------------
+    # 4. ACL verification logic
+    # -------------------------------
+    acl_ok=1
 
-  echo "$ACL_OUTPUT" | grep -q "user:tay:${EXP_TAY}" || \
-    echo "WARNING: tay does NOT have ${EXP_TAY} on ${BASENAME}"
+    # Expected permissions for Example 1 (per-user logic)
+    case "$SELF" in
 
-  echo "$ACL_OUTPUT" | grep -q "user:aba-hadi:${EXP_ABA}" || \
-    echo "WARNING: aba-hadi does NOT have ${EXP_ABA} on ${BASENAME}"
+        jack)
+            EXPECT_jack="rw-"
+            EXPECT_jill="r--"
+            EXPECT_tay="---"
+            EXPECT_aba="rw-"
+            ;;
+
+        jill)
+            EXPECT_jack="r--"
+            EXPECT_jill="rw-"
+            EXPECT_tay="---"
+            EXPECT_aba="rw-"
+            ;;
+
+        tay)
+            EXPECT_jack="---"
+            EXPECT_jill="---"
+            EXPECT_tay="rw-"
+            EXPECT_aba="rw-"
+            ;;
+
+        aba-hadi)
+            EXPECT_jack="rw-"
+            EXPECT_jill="rw-"
+            EXPECT_tay="rw-"
+            EXPECT_aba="rw-"
+            ;;
+    esac
+
+    # -------------------------------
+    # 5. Check each user
+    # -------------------------------
+    check_acl() {
+        local USER="$1"
+        local EXPECT="$2"
+
+        if ! echo "$ACL_OUTPUT" | grep -q "user:${USER}:${EXPECT}"; then
+            echo "WARNING: ${USER} does NOT have ${EXPECT} on ${BASENAME}"
+            acl_ok=0
+        fi
+    }
+
+    check_acl "jack" "$EXPECT_jack"
+    check_acl "jill" "$EXPECT_jill"
+    check_acl "tay" "$EXPECT_tay"
+    check_acl "aba-hadi" "$EXPECT_aba"
+
+    # -------------------------------
+    # 6. Final result for this file
+    # -------------------------------
+    if [ "$acl_ok" -eq 1 ]; then
+        echo "----- Permissions were set correctly for ${BASENAME} -----"
+    fi
 
 done
 
+# -------------------------------
+# 7. Final summary
+# -------------------------------
 if [ "$uploaded_any" -eq 0 ]; then
-  echo "No valid files were uploaded."
-  exit 1
+    echo "No valid files were uploaded."
 fi
