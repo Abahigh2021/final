@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Your MySeneca ID
 MY="aba-hadi"
 
 if [ "$#" -ne 2 ]; then
@@ -11,46 +12,49 @@ fi
 FILE="$1"
 OWNER="$2"
 
+# 1. Validation
 if [ ! -e "$FILE" ]; then
   echo "Error: file does not exist: $FILE"
   exit 1
 fi
 
-if [ "$OWNER" != "jack" ] && [ "$OWNER" != "jill" ] && [ "$OWNER" != "tay" ]; then
-  echo "Error: owner must be jack, jill, or tay"
-  exit 1
-fi
-
-echo "Applying Example 2 ACLs to $FILE (owner: $OWNER)"
-
-# Reset file
+# 2. Reset Permissions
+# Set ownership to the creator and their primary group
 chown "$OWNER:$OWNER" "$FILE"
-chmod 622 "$FILE"      # <-- IMPORTANT FIX
+# Clear existing ACLs
 setfacl -b "$FILE"
+# Base permissions: Owner can RW, Group/Others get nothing
+chmod 600 "$FILE"
 
-# Base ACLs
-setfacl -m u:$OWNER:rw- "$FILE"
-setfacl -m u:$MY:rwx "$FILE"
-setfacl -m g::--- "$FILE"
-setfacl -m o:--- "$FILE"
+echo "Applying ACLs to $FILE (Owner: $OWNER)"
 
+# 3. Universal Rule: MySeneca user always has RW access
+setfacl -m u:$MY:rw- "$FILE"
+
+# 4. Scenario Logic
 case "$OWNER" in
   jack)
-    # jill can write but not read
+    # Jill can write but NOT read
     setfacl -m u:jill:-w- "$FILE"
+    # Tay is explicitly blocked (redundant but safe)
     setfacl -m u:tay:--- "$FILE"
     ;;
   jill)
-    # jack can write but not read
+    # Jack can write but NOT read
     setfacl -m u:jack:-w- "$FILE"
+    # Tay is explicitly blocked
     setfacl -m u:tay:--- "$FILE"
     ;;
   tay)
-    # jack and jill cannot access tay's file
+    # Tay's files are private; Jack and Jill get nothing
     setfacl -m u:jack:--- "$FILE"
     setfacl -m u:jill:--- "$FILE"
     ;;
 esac
 
-echo "Example 2 ACLs applied."
+# 5. Lock down Group/Other (Ensure Tay can't sneak in via group perms)
+setfacl -m g::--- "$FILE"
+setfacl -m o:--- "$FILE"
+
+echo "Permissions updated successfully."
 getfacl "$FILE"
