@@ -8,7 +8,7 @@ SELF="$(id -un)"
 usage() {
   echo "Usage: $(basename "$0") file1 [file2 ...]"
   echo "Uploads files to $REMOTE_DIR on $GATEWAY_IP"
-  echo "Example 1 permissions applied automatically."
+  echo "Then verifies permissions for Example 1."
 }
 
 # -------------------------------
@@ -22,36 +22,32 @@ fi
 uploaded_any=0
 
 # -------------------------------
-# 2. Determine ACL rules for this user
+# 2. Expected ACLs for this user
 # -------------------------------
 case "$SELF" in
   jack)
-    OWNER="rw-"
-    JACK="rw-"
-    JILL="r--"
-    TAY="---"
-    ABA="rw-"
+    EXP_JACK="rw-"
+    EXP_JILL="r--"
+    EXP_TAY="---"
+    EXP_ABA="rw-"
     ;;
   jill)
-    OWNER="rw-"
-    JACK="r--"
-    JILL="rw-"
-    TAY="---"
-    ABA="rw-"
+    EXP_JACK="r--"
+    EXP_JILL="rw-"
+    EXP_TAY="---"
+    EXP_ABA="rw-"
     ;;
   tay)
-    OWNER="rw-"
-    JACK="---"
-    JILL="---"
-    TAY="rw-"
-    ABA="rw-"
+    EXP_JACK="---"
+    EXP_JILL="---"
+    EXP_TAY="rw-"
+    EXP_ABA="rw-"
     ;;
   aba-hadi)
-    OWNER="rw-"
-    JACK="rw-"
-    JILL="rw-"
-    TAY="rw-"
-    ABA="rw-"
+    EXP_JACK="rw-"
+    EXP_JILL="rw-"
+    EXP_TAY="rw-"
+    EXP_ABA="rw-"
     ;;
   *)
     echo "Error: unsupported user $SELF"
@@ -80,44 +76,26 @@ for FILE in "$@"; do
   uploaded_any=1
 
   # -------------------------------
-  # 4. Apply ACLs on gateway
-  # -------------------------------
-  ssh "${SELF}@${GATEWAY_IP}" bash <<EOF
-FILE_PATH="${REMOTE_DIR}/${BASENAME}"
-
-chmod 600 "\$FILE_PATH"
-setfacl -b "\$FILE_PATH"
-setfacl -k "\$FILE_PATH"
-
-setfacl -m u::${OWNER} "\$FILE_PATH"
-setfacl -m u:jack:${JACK} "\$FILE_PATH"
-setfacl -m u:jill:${JILL} "\$FILE_PATH"
-setfacl -m u:tay:${TAY} "\$FILE_PATH"
-setfacl -m u:aba-hadi:${ABA} "\$FILE_PATH"
-
-setfacl -m m:rw- "\$FILE_PATH"
-
-echo "----- ACL for \$FILE_PATH -----"
-getfacl "\$FILE_PATH"
-EOF
-
-  # -------------------------------
-  # 5. ACL VERIFICATION FOR THIS USER
+  # 4. Read ACLs from gateway
   # -------------------------------
   ACL_OUTPUT="$(ssh ${SELF}@${GATEWAY_IP} "getfacl ${REMOTE_DIR}/${BASENAME}")"
 
-  # Verify each expected ACL
-  echo "$ACL_OUTPUT" | grep -q "user:jack:${JACK}" || \
-    echo "WARNING: jack does NOT have ${JACK} on ${BASENAME}"
+  echo "----- Checking ACLs for ${BASENAME} -----"
 
-  echo "$ACL_OUTPUT" | grep -q "user:jill:${JILL}" || \
-    echo "WARNING: jill does NOT have ${JILL} on ${BASENAME}"
+  # -------------------------------
+  # 5. Verify expected ACLs
+  # -------------------------------
+  echo "$ACL_OUTPUT" | grep -q "user:jack:${EXP_JACK}" || \
+    echo "WARNING: jack does NOT have ${EXP_JACK} on ${BASENAME}"
 
-  echo "$ACL_OUTPUT" | grep -q "user:tay:${TAY}" || \
-    echo "WARNING: tay does NOT have ${TAY} on ${BASENAME}"
+  echo "$ACL_OUTPUT" | grep -q "user:jill:${EXP_JILL}" || \
+    echo "WARNING: jill does NOT have ${EXP_JILL} on ${BASENAME}"
 
-  echo "$ACL_OUTPUT" | grep -q "user:aba-hadi:${ABA}" || \
-    echo "WARNING: aba-hadi does NOT have ${ABA} on ${BASENAME}"
+  echo "$ACL_OUTPUT" | grep -q "user:tay:${EXP_TAY}" || \
+    echo "WARNING: tay does NOT have ${EXP_TAY} on ${BASENAME}"
+
+  echo "$ACL_OUTPUT" | grep -q "user:aba-hadi:${EXP_ABA}" || \
+    echo "WARNING: aba-hadi does NOT have ${EXP_ABA} on ${BASENAME}"
 
 done
 
