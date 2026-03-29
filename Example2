@@ -1,72 +1,57 @@
 #!/usr/bin/env bash
-# Script to apply Example 2 ACLs for the /public directory
 set -euo pipefail
 
 # Your MySeneca ID
 MY="aba-hadi"
 
-# 1. Argument Check
 if [ "$#" -ne 2 ]; then
-  echo "Usage: $0 /path/to/file ownername"
+  echo "Usage: $0 /public/filename ownername"
   exit 1
 fi
 
 FILE="$1"
 OWNER="$2"
 
-# 2. File Validation
 if [ ! -e "$FILE" ]; then
   echo "Error: file does not exist: $FILE"
   exit 1
 fi
 
-if [ "$OWNER" != "jack" ] && [ "$OWNER" != "jill" ] && [ "$OWNER" != "tay" ]; then
-  echo "Error: owner must be jack, jill, or tay"
-  exit 1
-fi
-
 echo "Applying Example 2 ACLs to $FILE (Owner: $OWNER)"
 
-# 3. Reset Ownership and Permissions
-# Set owner and primary group
+# 1. Reset everything
 chown "$OWNER:$OWNER" "$FILE"
-
-# Reset ACLs to clear any previous messy rules
 setfacl -b "$FILE"
+chmod 600 "$FILE"
 
-# IMPORTANT: chmod 666 allows the ACL mask to function correctly
-# for write-only (w) permissions for non-owners.
-chmod 666 "$FILE"
-
-# 4. Global ACL Rules
-# Ensure MySeneca user always has full Read/Write
+# 2. Base ACLs
+setfacl -m u:$OWNER:rw- "$FILE"
 setfacl -m u:$MY:rw- "$FILE"
-
-# Ensure the Group and Others have NO access by default
-# This effectively locks out 'tay' from files he doesn't own.
 setfacl -m g::--- "$FILE"
 setfacl -m o:--- "$FILE"
 
-# 5. Conditional ACL Rules based on Owner
+# 3. Apply Conditional Logic
 case "$OWNER" in
   jack)
-    # Jill can write but NOT read
+    # Jill can write but not read
     setfacl -m u:jill:-w- "$FILE"
-    # Tay is explicitly blocked
     setfacl -m u:tay:--- "$FILE"
     ;;
   jill)
-    # Jack can write but NOT read
+    # Jack can write but not read
     setfacl -m u:jack:-w- "$FILE"
-    # Tay is explicitly blocked
     setfacl -m u:tay:--- "$FILE"
     ;;
   tay)
-    # Tay's files are private. Jack and Jill get nothing.
+    # Jack and jill cannot access tay's file
     setfacl -m u:jack:--- "$FILE"
     setfacl -m u:jill:--- "$FILE"
     ;;
 esac
 
-echo "--- ACLs applied successfully ---"
+# 4. THE FIX: Set the mask to allow the 'w' bit to pass through
+# Without this, Jack/Jill get "Permission denied" despite their ACL entry
+setfacl -m m:rw- "$FILE"
+
+echo "Example 2 ACLs applied."
 getfacl "$FILE"
