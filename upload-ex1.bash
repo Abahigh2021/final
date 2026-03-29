@@ -4,6 +4,8 @@ set -u
 GATEWAY="192.168.99.4"
 REMOTE_DIR="/public"
 SELF="$(id -un)"
+SOCKET_DIR="${HOME}/.ssh/cm"
+mkdir -p "$SOCKET_DIR"
 
 usage() {
     echo "Usage: $0 file1 [file2 ...]"
@@ -45,6 +47,52 @@ case "$SELF" in
         ;;
 esac
 
+control_path() {
+    local user="$1"
+    echo "${SOCKET_DIR}/cm-${user}@${GATEWAY}"
+}
+
+ensure_connection() {
+    local user="$1"
+    local cp
+    cp="$(control_path "$user")"
+
+    if ssh -o ControlMaster=auto \
+          -o ControlPersist=10m \
+          -o ControlPath="$cp" \
+          -O check "${user}@${GATEWAY}" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    echo "Opening SSH connection for ${user}@${GATEWAY} ..."
+    ssh -o ControlMaster=auto \
+        -o ControlPersist=10m \
+        -o ControlPath="$cp" \
+        -o ConnectTimeout=10 \
+        "${user}@${GATEWAY}" "exit" || return 1
+}
+
+remote_test() {
+    local user="$1"
+    local mode="$2"
+    local file="$3"
+    local cp
+    cp="$(control_path "$user")"
+
+    ssh -o ControlPath="$cp" \
+        -o ConnectTimeout=10 \
+        "${user}@${GATEWAY}" "test ${mode} '${file}'"
+}
+
+close_connection() {
+    local user="$1"
+    local cp
+    cp="$(control_path "$user")"
+
+    ssh -o ControlPath="$cp" \
+        -O exit "${user}@${GATEWAY}" >/dev/null 2>&1 || true
+}
+
 uploaded_any=0
 
 for file in "$@"; do
@@ -54,9 +102,17 @@ for file in "$@"; do
     fi
 
     base="$(basename "$file")"
+    remote_file="${REMOTE_DIR}/${base}"
 
     echo "Uploading $file ..."
-    if ! scp "$file" "${SELF}@${GATEWAY}:${REMOTE_DIR}/"; then
+
+    if ! ensure_connection "$SELF"; then
+        echo "Error: could not authenticate as ${SELF} on gateway"
+        continue
+    fi
+
+    if ! scp -o ControlPath="$(control_path "$SELF")" \
+             "$file" "${SELF}@${GATEWAY}:${REMOTE_DIR}/"; then
         echo "Error: upload failed for $file"
         continue
     fi
@@ -65,61 +121,71 @@ for file in "$@"; do
     echo "Uploaded: $base"
     echo "Checking Example 1 behavior for $base ..."
 
-    # uploader should read
-    if ssh "${SELF}@${GATEWAY}" "test -r ${REMOTE_DIR}/${base}"; then
+    # uploader
+    if remote_test "$SELF" -r "$remote_file"; then
         echo "PASS: ${SELF} can read $base"
     else
         echo "WARNING: ${SELF} should be able to read $base"
     fi
 
-    # uploader should write
-    if ssh "${SELF}@${GATEWAY}" "test -w ${REMOTE_DIR}/${base}"; then
+    if remote_test "$SELF" -w "$remote_file"; then
         echo "PASS: ${SELF} can write $base"
     else
         echo "WARNING: ${SELF} should be able to write $base"
     fi
 
-    # aba-hadi should always read
-    if ssh "aba-hadi@${GATEWAY}" "test -r ${REMOTE_DIR}/${base}"; then
-        echo "PASS: aba-hadi can read $base"
+    # aba-hadi
+    if ensure_connection "aba-hadi"; then
+        if remote_test "aba-hadi" -r "$remote_file"; then
+            echo "PASS: aba-hadi can read $base"
+        else
+            echo "WARNING: aba-hadi should be able to read $base"
+        fi
+
+        if remote_test "aba-hadi" -w "$remote_file"; then
+            echo "PASS: aba-hadi can write $base"
+        else
+            echo "WARNING: aba-hadi should be able to write $base"
+        fi
     else
-        echo "WARNING: aba-hadi should be able to read $base"
+        echo "WARNING: could not authenticate as aba-hadi to test $base"
     fi
 
-    # aba-hadi should always write
-    if ssh "aba-hadi@${GATEWAY}" "test -w ${REMOTE_DIR}/${base}"; then
-        echo "PASS: aba-hadi can write $base"
-    else
-        echo "WARNING: aba-hadi should be able to write $base"
-    fi
-
-    # partner should read only
+    # partner
     if [ -n "$partner" ]; then
-        if ssh "${partner}@${GATEWAY}" "test -r ${REMOTE_DIR}/${base}"; then
-            echo "PASS: ${partner} can read $base"
-        else
-            echo "WARNING: ${partner} should be able to read $base"
-        fi
+        if ensure_connection "$partner"; then
+            if remote_test "$partner" -r "$remote_file"; then
+                echo "PASS: ${partner} can read $base"
+            else
+                echo "WARNING: ${partner} should be able to read $base"
+            fi
 
-        if ssh "${partner}@${GATEWAY}" "test -w ${REMOTE_DIR}/${base}"; then
-            echo "WARNING: ${partner} should NOT be able to write $base"
+            if remote_test "$partner" -w "$remote_file"; then
+                echo "WARNING: ${partner} should NOT be able to write $base"
+            else
+                echo "PASS: ${partner} cannot write $base"
+            fi
         else
-            echo "PASS: ${partner} cannot write $base"
+            echo "WARNING: could not authenticate as ${partner} to test $base"
         fi
     fi
 
-    # blocked users should have no access
+    # blocked users
     for u in $blocked_users; do
-        if ssh "${u}@${GATEWAY}" "test -r ${REMOTE_DIR}/${base}"; then
-            echo "WARNING: ${u} should NOT be able to read $base"
-        else
-            echo "PASS: ${u} cannot read $base"
-        fi
+        if ensure_connection "$u"; then
+            if remote_test "$u" -r "$remote_file"; then
+                echo "WARNING: ${u} should NOT be able to read $base"
+            else
+                echo "PASS: ${u} cannot read $base"
+            fi
 
-        if ssh "${u}@${GATEWAY}" "test -w ${REMOTE_DIR}/${base}"; then
-            echo "WARNING: ${u} should NOT be able to write $base"
+            if remote_test "$u" -w "$remote_file"; then
+                echo "WARNING: ${u} should NOT be able to write $base"
+            else
+                echo "PASS: ${u} cannot write $base"
+            fi
         else
-            echo "PASS: ${u} cannot write $base"
+            echo "WARNING: could not authenticate as ${u} to test $base"
         fi
     done
 
