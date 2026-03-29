@@ -1,42 +1,58 @@
 #!/usr/bin/env bash
+# Script to apply Example 2 ACLs for the /public directory
 set -euo pipefail
 
 # Your MySeneca ID
 MY="aba-hadi"
 
+# 1. Argument Check
 if [ "$#" -ne 2 ]; then
-  echo "Usage: $0 /public/filename ownername"
+  echo "Usage: $0 /path/to/file ownername"
   exit 1
 fi
 
 FILE="$1"
 OWNER="$2"
 
-# 1. Validation
+# 2. File Validation
 if [ ! -e "$FILE" ]; then
   echo "Error: file does not exist: $FILE"
   exit 1
 fi
 
-# 2. Reset Permissions
-# Set ownership to the creator and their primary group
+if [ "$OWNER" != "jack" ] && [ "$OWNER" != "jill" ] && [ "$OWNER" != "tay" ]; then
+  echo "Error: owner must be jack, jill, or tay"
+  exit 1
+fi
+
+echo "Applying Example 2 ACLs to $FILE (Owner: $OWNER)"
+
+# 3. Reset Ownership and Permissions
+# Set owner and primary group
 chown "$OWNER:$OWNER" "$FILE"
-# Clear existing ACLs
+
+# Reset ACLs to clear any previous messy rules
 setfacl -b "$FILE"
-# Base permissions: Owner can RW, Group/Others get nothing
-chmod 600 "$FILE"
 
-echo "Applying ACLs to $FILE (Owner: $OWNER)"
+# IMPORTANT: chmod 666 allows the ACL mask to function correctly
+# for write-only (w) permissions for non-owners.
+chmod 666 "$FILE"
 
-# 3. Universal Rule: MySeneca user always has RW access
+# 4. Global ACL Rules
+# Ensure MySeneca user always has full Read/Write
 setfacl -m u:$MY:rw- "$FILE"
 
-# 4. Scenario Logic
+# Ensure the Group and Others have NO access by default
+# This effectively locks out 'tay' from files he doesn't own.
+setfacl -m g::--- "$FILE"
+setfacl -m o:--- "$FILE"
+
+# 5. Conditional ACL Rules based on Owner
 case "$OWNER" in
   jack)
     # Jill can write but NOT read
     setfacl -m u:jill:-w- "$FILE"
-    # Tay is explicitly blocked (redundant but safe)
+    # Tay is explicitly blocked
     setfacl -m u:tay:--- "$FILE"
     ;;
   jill)
@@ -46,15 +62,11 @@ case "$OWNER" in
     setfacl -m u:tay:--- "$FILE"
     ;;
   tay)
-    # Tay's files are private; Jack and Jill get nothing
+    # Tay's files are private. Jack and Jill get nothing.
     setfacl -m u:jack:--- "$FILE"
     setfacl -m u:jill:--- "$FILE"
     ;;
 esac
 
-# 5. Lock down Group/Other (Ensure Tay can't sneak in via group perms)
-setfacl -m g::--- "$FILE"
-setfacl -m o:--- "$FILE"
-
-echo "Permissions updated successfully."
+echo "--- ACLs applied successfully ---"
 getfacl "$FILE"
