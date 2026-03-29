@@ -1,0 +1,17 @@
+sudo -i bash -c '
+LOG=/tmp/acl_debug.log
+echo "=== BEFORE ===" >$LOG
+ls -l /public/jill.txt >>$LOG
+getfacl /public/jill.txt >>$LOG
+setfacl -b /public/jill.txt
+setfacl -k /public/jill.txt
+chattr -i /public/jill.txt 2>/dev/null || true
+chmod 622 /public/jill.txt
+apply_acl_exam2.sh /public/jill.txt jill >>$LOG 2>&1 || true
+echo "=== AFTER ===" >>$LOG
+ls -l /public/jill.txt >>$LOG
+getfacl /public/jill.txt >>$LOG
+echo "=== TEST WRITE AS JACK ===" >>$LOG
+sudo -u jack bash -c "echo test >> /public/jill.txt" >>$LOG 2>&1 || true
+tail -n 200 $LOG
+'
