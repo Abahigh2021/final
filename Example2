@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Your MySeneca ID
 MY="aba-hadi"
 
 if [ "$#" -ne 2 ]; then
@@ -17,41 +16,42 @@ if [ ! -e "$FILE" ]; then
   exit 1
 fi
 
+if [[ "$OWNER" != "jack" && "$OWNER" != "jill" && "$OWNER" != "tay" ]]; then
+  echo "Error: owner must be jack, jill, or tay"
+  exit 1
+fi
+
 echo "Applying Example 2 ACLs to $FILE (Owner: $OWNER)"
 
-# 1. Reset everything
-chown "$OWNER:$OWNER" "$FILE"
-setfacl -b "$FILE"
-chmod 600 "$FILE"
+# DO NOT CHANGE PERMISSIONS HERE — Example 2 REQUIRES 622
+# The user must set chmod 622 BEFORE running this script.
+# We only apply ACLs.
 
-# 2. Base ACLs
+# Clear ACLs
+setfacl -b "$FILE"
+setfacl -k "$FILE"
+
+# Base ACLs
 setfacl -m u:$OWNER:rw- "$FILE"
 setfacl -m u:$MY:rw- "$FILE"
 setfacl -m g::--- "$FILE"
-setfacl -m o:--- "$FILE"
+setfacl -m o::--- "$FILE"
+setfacl -m m:rw- "$FILE"
 
-# 3. Apply Conditional Logic
 case "$OWNER" in
   jack)
-    # Jill can write but not read
     setfacl -m u:jill:-w- "$FILE"
     setfacl -m u:tay:--- "$FILE"
     ;;
   jill)
-    # Jack can write but not read
     setfacl -m u:jack:-w- "$FILE"
     setfacl -m u:tay:--- "$FILE"
     ;;
   tay)
-    # Jack and jill cannot access tay's file
     setfacl -m u:jack:--- "$FILE"
     setfacl -m u:jill:--- "$FILE"
     ;;
 esac
 
-# 4. THE FIX: Set the mask to allow the 'w' bit to pass through
-# Without this, Jack/Jill get "Permission denied" despite their ACL entry
-setfacl -m m:rw- "$FILE"
-
-echo "Example 2 ACLs applied."
+echo "--- ACLs applied successfully ---"
 getfacl "$FILE"
