@@ -1,0 +1,9 @@
+for u in jack jill tay aba-hadi; do
+  mkdir -p /home/$u/bin
+  cp upload-ex1.bash /home/$u/bin/
+  cp upload-ex2.bash /home/$u/bin/
+  chown $u:$u /home/$u/bin/upload-ex1.bash
+  chown $u:$u /home/$u/bin/upload-ex2.bash
+  chmod +x /home/$u/bin/upload-ex1.bash
+  chmod +x /home/$u/bin/upload-ex2.bash
+done
