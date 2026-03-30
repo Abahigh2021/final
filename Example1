@@ -30,27 +30,21 @@ setfacl -b "$FILE"
 
 # Base ACLs
 setfacl -m u:$OWNER:rw- "$FILE"
-setfacl -m u:$MY:rwx "$FILE"
+setfacl -m u:$MY:rw- "$FILE"
 setfacl -m g::--- "$FILE"
 setfacl -m o:--- "$FILE"
 
 case "$OWNER" in
   jack)
-    # jill can read jack
     setfacl -m u:jill:r-- "$FILE"
-    # jack cannot read tay, so tay cannot read jack
     setfacl -m u:tay:--- "$FILE"
     ;;
   jill)
-    # jack can read jill
     setfacl -m u:jack:r-- "$FILE"
-    # tay cannot read jill
     setfacl -m u:tay:--- "$FILE"
     ;;
   tay)
-    # jack cannot read tay
     setfacl -m u:jack:--- "$FILE"
-    # jill cannot read tay
     setfacl -m u:jill:--- "$FILE"
     ;;
 esac
