@@ -17,8 +17,8 @@ if [ ! -e "$FILE" ]; then
   exit 1
 fi
 
-if [ "$OWNER" != "jack" ] && [ "$OWNER" != "jill" ] && [ "$OWNER" != "tay" ] && [ "$OWNER" != "$MY" ]; then
-  echo "Error: owner must be jack, jill, tay, or $MY"
+if [ "$OWNER" != "jack" ] && [ "$OWNER" != "jill" ] && [ "$OWNER" != "tay" ]; then
+  echo "Error: owner must be jack, jill, or tay"
   exit 1
 fi
 
@@ -56,15 +56,6 @@ case "$OWNER" in
     setfacl -m u:jack:--- "$FILE"
     # Jill cannot access Tay
     setfacl -m u:jill:--- "$FILE"
-    ;;
-
-  $MY)
-    # MySeneca user owns the file
-    # Jack and Jill can write but not read
-    setfacl -m u:jack:-w- "$FILE"
-    setfacl -m u:jill:-w- "$FILE"
-    # Tay cannot access
-    setfacl -m u:tay:--- "$FILE"
     ;;
 esac
 
