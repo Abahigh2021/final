@@ -57,12 +57,12 @@ Mitigation reminder after grading (do NOT do during test): `[describe how you wi
 ## Task 3 — Traffic Examiner
 
 - Capture interface: `[Fill in here. e.g., eth0]`
-- TLS ClientHello fields (`frame/ip.dst/SNI/version`): `[Fill in here. e.g., frame #:IP:SNI:0xXXXX]`
-- TLS version interpreted: `[Fill in here. e.g., TLS 1.2]`
-- `io,stat` TLS/HTTP line: `[Fill in here.]`
-- Host/IP + protocol(s) from capture evidence: `[Fill in here. describe based on packets]`
-- `ls -l final_capture.pcapng`: `[Fill in here.]`
-- `TASK3-TOKEN`: `[TASK3-TOKEN:...]`
+- TLS ClientHello fields (`frame/ip.dst/SNI/version`): `8/142.251.157.119/www.google.com/0x0301`
+- TLS version interpreted: `TLS 1.0`
+- `io,stat` TLS/HTTP line: `  0 <> 1  |      0 |     50`
+- Host/IP + protocol(s) from capture evidence: `142.251.157.119	www.google.com`
+- `ls -l final_capture.pcapng`: `-rw------- 1 aba-hadi aba-hadi 97360 Apr 11 11:26 final_capture.pcapng`
+- `TASK3-TOKEN`: `python3 token.py `
 
 Optional Notes (max 2 sentences to describe what the python program `task_network.py` does):  
 `[brief observation]`
